@@ -164,16 +164,7 @@ void pulp_conv_pw_fp32_bw_param_grads_cl(void *PointWise_Conv_args) {
         matMul_args.K = W_out * H_out;
         matMul_args.trans_B = 1;
 
-        #ifndef OPTIMIZE
         pi_cl_team_fork(NUM_CORES, mm_add, &matMul_args);
-        #else
-        struct mm_manager_args man_args;
-        man_args.mm_args = &matMul_args;
-        man_args.layer_type = LAYER_PW_CONV;
-        man_args.step_type = STEP_WGT_GRAD;
-        man_args.matmul_type = opt_matmul_type; //MATMUL_TYPE;
-        pi_cl_team_fork(NUM_CORES, mm_manager, &man_args);
-        #endif
     }
         // HWC format for both input and output
     else if (HWC == 1) {
