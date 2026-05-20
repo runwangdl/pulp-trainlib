@@ -171,6 +171,7 @@ void pulp_conv2d_fp32_bw_param_grads_cl( void * Conv2D_args );
  * @param USE_DMA_IM2COL in case the primitive uses IM2COL + MM, select if to perform im2col using DMA-managed transfers from L2 to L1 (output gradient tensor needs to be stored in L2, im2col_buffer in L1)
  */
 void pulp_conv2d_fp32_bw_input_grads_cl( void * Conv2D_args );
+void pulp_conv2d_fp32_bw_input_grads_tiled_cl( void * Conv2D_args );
 
 
 

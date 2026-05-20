@@ -93,6 +93,10 @@ void naive_conv2d_param_grad_kernel_CHW(
  * @brief Naive conv2d kernel for the computation of the input gradient (CHW format)
  * @param matMul_args pointer to a matMul_args structure  
  */
+void naive_conv2d_in_grad_kernel_CHW_tiled(
+    void * matMul_args
+);
+
 void naive_conv2d_in_grad_kernel_CHW(
     void * matMul_args
 );
