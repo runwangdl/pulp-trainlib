@@ -57,6 +57,11 @@ struct DepthWise_Conv_args {
     int skip_in_grad;
 
     int HWC;
+
+    int offset_in_h;
+    int offset_in_w;
+    int offset_out_h;
+    int offset_out_w;
 };
 
 
@@ -122,3 +127,11 @@ void pulp_conv_dw_fp32_bw_param_grads_cl(void *DepthWise_Conv_args);
  * @param HWC tells the DW Convolution if the output tensor is in CHW layout (HWC=0) or HWC format (HWC=1)
  */
 void pulp_conv_dw_fp32_bw_input_grads_cl(void *DepthWise_Conv_args);
+
+
+/**
+ * @brief Tile-aware backward pass function which computes input's gradient only.
+ *        Uses tile offsets from DepthWise_Conv_args to handle spatial tiling.
+ * @param DepthWise_Conv_args pointer to a DepthWise_Conv_args structure
+ */
+void pulp_conv_dw_fp32_bw_input_grads_tiled_cl(void *DepthWise_Conv_args);

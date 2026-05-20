@@ -324,6 +324,97 @@ void dw_kernel_input_grad_padded(void *kernel_DW_args) {
 }
 
 
+// Tile-aware input grad kernel for DepthWise Convolution.
+// Same gather pattern as dw_kernel_input_grad_padded but with tile offsets:
+// H_in/W_in/H_out/W_out are tile-local dimensions; offset_in/out_h/w give the
+// global position of the tile so that padding and stride calculations remain
+// correct across spatial tiles.
+void dw_kernel_input_grad_padded_tiled(void *kernel_DW_args) {
+    struct kernel_DW_args *args = (struct kernel_DW_args *) kernel_DW_args;
+
+    float *inDiff    = args->input->diff;
+    float *coeffData = args->weights->data;
+    float *outDiff   = args->output->diff;
+
+    int C_in  = (int) args->input->C;
+    int H_in  = (int) args->input->H;   // tile height of dX
+    int W_in  = (int) args->input->W;   // tile width  of dX
+    int pH    = (int) args->weights->H;
+    int pW    = (int) args->weights->W;
+    int H_out = (int) args->output->H;  // tile height of dY
+    int W_out = (int) args->output->W;  // tile width  of dY
+    int Upad     = args->Upad;
+    int Lpad     = args->Lpad;
+    int stride_h = args->stride_h;
+    int stride_w = args->stride_w;
+
+    int off_in_h  = args->offset_in_h;
+    int off_in_w  = args->offset_in_w;
+    int off_out_h = args->offset_out_h;
+    int off_out_w = args->offset_out_w;
+
+    int blockSize = (C_in + NUM_CORES - 1) / NUM_CORES;
+    int start = pi_core_id() * blockSize;
+    int stop  = start + blockSize > C_in ? C_in : start + blockSize;
+
+    /* For each dX position (ch, hin_local, win_local) in the tile we compute
+     * the global coordinate and derive which dY positions (ho, wo) contribute.
+     * ho/wo are then mapped back to tile-local dY indices for the array access.
+     *
+     * dX[ch,hin,win] = sum_{valid ho,wo} dY[ch,ho,wo] * W_rot[ch,hk,wk]
+     *   where hk = hin_global + Upad - ho_global * stride_h
+     */
+    for (int ch = start; ch < stop; ch++) {
+        int ch_in_off  = ch * H_in  * W_in;
+        int ch_out_off = ch * H_out * W_out;
+        int ch_w_off   = ch * pH * pW;
+
+        for (int hin = 0; hin < H_in; hin++) {
+            int hin_g = hin + off_in_h;  // global coordinate
+
+            /* ho_global range: hk = hin_g + Upad - ho_g * sh must be in [0, pH) */
+            int a_h    = hin_g + Upad - pH + 1;
+            int ho_g_min = (a_h <= 0) ? 0 : (a_h + stride_h - 1) / stride_h;
+            int ho_g_max = (hin_g + Upad) / stride_h + 1;
+
+            /* Convert global ho range to tile-local dY indices */
+            int ho_min = ho_g_min - off_out_h;
+            int ho_max = ho_g_max - off_out_h;
+            if (ho_min < 0) ho_min = 0;
+            if (ho_max > H_out) ho_max = H_out;
+
+            for (int win = 0; win < W_in; win++) {
+                int win_g = win + off_in_w;  // global coordinate
+
+                /* wo_global range */
+                int a_w    = win_g + Lpad - pW + 1;
+                int wo_g_min = (a_w <= 0) ? 0 : (a_w + stride_w - 1) / stride_w;
+                int wo_g_max = (win_g + Lpad) / stride_w + 1;
+
+                int wo_min = wo_g_min - off_out_w;
+                int wo_max = wo_g_max - off_out_w;
+                if (wo_min < 0) wo_min = 0;
+                if (wo_max > W_out) wo_max = W_out;
+
+                float temp = 0;
+                for (int ho = ho_min; ho < ho_max; ho++) {
+                    int ho_g   = ho + off_out_h;
+                    int hk     = hin_g + Upad - ho_g * stride_h;
+                    int out_row = ho * W_out + ch_out_off;
+                    int w_row   = hk * pW    + ch_w_off;
+                    for (int wo = wo_min; wo < wo_max; wo++) {
+                        int wo_g = wo + off_out_w;
+                        int wk   = win_g + Lpad - wo_g * stride_w;
+                        temp += coeffData[wk + w_row] * outDiff[wo + out_row];
+                    }
+                }
+                inDiff[win + hin * W_in + ch_in_off] = temp;
+            }
+        }
+    }
+}
+
+
 /** CONV2D KERNELS **/
 void naive_conv2d_fw_kernel_CHW(void *matMul_args) {
     struct matMul_args *args = (struct matMul_args *) matMul_args;

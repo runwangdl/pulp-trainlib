@@ -110,3 +110,28 @@ void pulp_conv_dw_fp32_bw_input_grads_cl(void *DepthWise_Conv_args) {
         pi_cl_team_fork(NUM_CORES, dw_kernel_input_grad, &ker_args);
     }
 }
+
+
+void pulp_conv_dw_fp32_bw_input_grads_tiled_cl(void *DepthWise_Conv_args) {
+    struct DepthWise_Conv_args *DW_args = (struct DepthWise_Conv_args *) DepthWise_Conv_args;
+
+    struct kernel_DW_args ker_args;
+    ker_args.input = DW_args->input;
+    ker_args.weights = DW_args->coeff;
+    ker_args.output = DW_args->output;
+
+    ker_args.stride_h = DW_args->stride_h;
+    ker_args.stride_w = DW_args->stride_w;
+
+    ker_args.Lpad = DW_args->Lpad;
+    ker_args.Rpad = DW_args->Rpad;
+    ker_args.Upad = DW_args->Upad;
+    ker_args.Dpad = DW_args->Dpad;
+
+    ker_args.offset_in_h  = DW_args->offset_in_h;
+    ker_args.offset_in_w  = DW_args->offset_in_w;
+    ker_args.offset_out_h = DW_args->offset_out_h;
+    ker_args.offset_out_w = DW_args->offset_out_w;
+
+    pi_cl_team_fork(NUM_CORES, dw_kernel_input_grad_padded_tiled, &ker_args);
+}
