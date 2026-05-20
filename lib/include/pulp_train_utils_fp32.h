@@ -294,6 +294,12 @@ struct matMul_args {
     int USE_BIASES;
     int bias_transposed;
     int HWC;
+
+    // Tile offset support for ConvGradX tiled kernels
+    int offset_in_h;
+    int offset_in_w;
+    int offset_out_h;
+    int offset_out_w;
 };
 
 

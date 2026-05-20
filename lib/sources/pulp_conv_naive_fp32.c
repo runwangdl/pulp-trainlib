@@ -737,6 +737,97 @@ void naive_conv2d_in_grad_kernel_CHW(void *matMul_args) {
 }
 
 
+
+
+// Tile-aware naive conv2d input gradient kernel (CHW format).
+// Same gather pattern as naive_conv2d_in_grad_kernel_CHW but with tile offsets:
+// H/W are tile-local dimensions; offset_in/out_h/w give the global position.
+void naive_conv2d_in_grad_kernel_CHW_tiled(void *matMul_args) {
+    struct matMul_args *args = (struct matMul_args *) matMul_args;
+
+    float *__restrict__ inDiff = args->A;     // dX tile
+    float *__restrict__ coeffData = args->B;  // W (full)
+    float *__restrict__ outDiff = args->C;    // dY tile
+
+    const int H_in = args->H;     // tile height of dX
+    const int W_in = args->W;     // tile width of dX
+    const int pW = args->pW;
+    const int pH = args->pH;
+    const int C_in = args->pCin;
+    const int C_out = args->pCout;
+
+    const int stride_h = args->stride_h;
+    const int stride_w = args->stride_w;
+    const int Upad = args->Upad;
+    const int Lpad = args->Lpad;
+
+    const int off_in_h  = args->offset_in_h;
+    const int off_in_w  = args->offset_in_w;
+    const int off_out_h = args->offset_out_h;
+    const int off_out_w = args->offset_out_w;
+
+    // Derive dY tile dimensions from blob (passed via args->C which points
+    // to outDiff; H_out/W_out are not in matMul_args, so we compute them
+    // from the Conv2D_args that set up this call — the wrapper passes them
+    // through the H_out/W_out fields repurposed into N/K).
+    const int H_out = args->N;  // repurposed: wrapper stores H_out_tile here
+    const int W_out = args->K;  // repurposed: wrapper stores W_out_tile here
+
+    const int blockSize = (C_in + NUM_CORES - 1) / NUM_CORES;
+    const int start = pi_core_id() * blockSize;
+    int stop  = start + blockSize;
+    if (stop > C_in) stop = C_in;
+
+    for (int ci = start; ci < stop; ci++) {
+        int ch_in_off  = ci * H_in * W_in;
+        int ch_w_base  = ci * pH * pW;  // W layout: [Cout, Cin, pH, pW]
+
+        for (int hi = 0; hi < H_in; hi++) {
+            int hi_g = hi + off_in_h;  // global coordinate
+
+            for (int wi = 0; wi < W_in; wi++) {
+                int wi_g = wi + off_in_w;
+
+                float temp = 0;
+                for (int co = 0; co < C_out; co++) {
+                    int ch_out_off = co * H_out * W_out;
+                    // W index base for this (co, ci) pair
+                    // W layout: [Cout][Cin][pH][pW], kernel is flipped for
+                    // transposed conv
+                    int w_co_ci = co * C_in * pH * pW + ch_w_base;
+
+                    for (int hk = 0; hk < pH; hk++) {
+                        // ho_global * stride = hi_global + Upad - hk
+                        int num_h = hi_g + Upad - hk;
+                        if (num_h < 0 || num_h % stride_h != 0)
+                            continue;
+                        int ho_g = num_h / stride_h;
+                        int ho = ho_g - off_out_h;  // tile-local
+                        if (ho < 0 || ho >= H_out)
+                            continue;
+
+                        for (int wk = 0; wk < pW; wk++) {
+                            int num_w = wi_g + Lpad - wk;
+                            if (num_w < 0 || num_w % stride_w != 0)
+                                continue;
+                            int wo_g = num_w / stride_w;
+                            int wo = wo_g - off_out_w;
+                            if (wo < 0 || wo >= W_out)
+                                continue;
+
+                            // Flipped kernel: W[co, ci, pH-1-hk, pW-1-wk]
+                            int ker_idx = w_co_ci + (pH - 1 - hk) * pW + (pW - 1 - wk);
+                            int out_idx = ch_out_off + ho * W_out + wo;
+
+                            temp += coeffData[ker_idx] * outDiff[out_idx];
+                        }
+                    }
+                }
+                inDiff[ch_in_off + hi * W_in + wi] = temp;
+            }
+        }
+    }
+}
 /** CONV2D OPTIMIZED VERSIONS **/
 void naive_conv2d_fw_kernel_CHW_k3x3_s2_p1(void *matMul_args) {
     struct matMul_args *args = (struct matMul_args *) matMul_args;

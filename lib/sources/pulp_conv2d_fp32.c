@@ -666,6 +666,57 @@ void pulp_conv2d_fp32_bw_input_grads_cl(void *Conv2D_args) {
 }
 
 
+void pulp_conv2d_fp32_bw_input_grads_tiled_cl(void *Conv2D_args) {
+    struct Conv2D_args *C2D_args = (struct Conv2D_args *) Conv2D_args;
+    struct matMul_args matMul_args;
+
+    int H_in = C2D_args->input->H;
+    int W_in = C2D_args->input->W;
+    int C_in = C2D_args->input->C;
+    int pH = C2D_args->coeff->H;
+    int pW = C2D_args->coeff->W;
+    int H_out = C2D_args->output->H;
+    int W_out = C2D_args->output->W;
+    int C_out = C2D_args->output->C;
+
+    float *inDiff = C2D_args->input->diff;
+    float *coeffData = C2D_args->coeff->data;
+    float *outDiff = C2D_args->output->diff;
+
+    int stride_h = C2D_args->stride_h;
+    int stride_w = C2D_args->stride_w;
+    int Upad = C2D_args->Upad;
+    int Lpad = C2D_args->Lpad;
+
+    // Set up matMul_args for the tiled naive kernel
+    matMul_args.A = inDiff;       // dX tile
+    matMul_args.B = coeffData;    // W (full)
+    matMul_args.C = outDiff;      // dY tile
+    matMul_args.H = H_in;        // tile H of dX
+    matMul_args.W = W_in;        // tile W of dX
+    matMul_args.pCin = C_in;
+    matMul_args.pCout = C_out;
+    matMul_args.pH = pH;
+    matMul_args.pW = pW;
+    matMul_args.stride_h = stride_h;
+    matMul_args.stride_w = stride_w;
+    matMul_args.Upad = Upad;
+    matMul_args.Lpad = Lpad;
+
+    // Repurpose N/K for tile dimensions of dY (not available in matMul_args)
+    matMul_args.N = H_out;  // H_out_tile
+    matMul_args.K = W_out;  // W_out_tile
+
+    // Tile offsets
+    matMul_args.offset_in_h  = C2D_args->offset_in_h;
+    matMul_args.offset_in_w  = C2D_args->offset_in_w;
+    matMul_args.offset_out_h = C2D_args->offset_out_h;
+    matMul_args.offset_out_w = C2D_args->offset_out_w;
+
+    pi_cl_team_fork(NUM_CORES, naive_conv2d_in_grad_kernel_CHW_tiled, &matMul_args);
+}
+
+
 void im2col_conv2d_fw_kernel(void *void_args) {
     struct mm_manager_args *man_args = (struct mm_manager_args *) void_args;
     struct matMul_args *args = man_args->mm_args;
