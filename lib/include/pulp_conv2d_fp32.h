@@ -69,6 +69,10 @@ struct Conv2D_args {
     int USE_BIASES;
 	int USE_IM2COL;
 	int USE_DMA_IM2COL;
+	int offset_in_h;
+	int offset_in_w;
+	int offset_out_h;
+	int offset_out_w;
 };
 
 
