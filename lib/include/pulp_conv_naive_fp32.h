@@ -60,6 +60,16 @@ void dw_kernel_input_grad_padded(
     void * matMul_DW_args
 );
 
+/**
+ * @brief Tile-aware input gradient kernel for Depthwise Convolution with
+ *        padding and arbitrary stride. Uses offset_in/out_h/w from
+ *        kernel_DW_args to map tile-local to global coordinates.
+ * @param matMul_DW_args  pointer to a kernel_DW_args structure
+*/
+void dw_kernel_input_grad_padded_tiled(
+    void * matMul_DW_args
+);
+
 
 /** CONV2D KERNELS **/
 

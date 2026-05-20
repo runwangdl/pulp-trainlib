@@ -346,6 +346,11 @@ struct kernel_DW_args {
     int Rpad;
     int Upad;
     int Dpad;
+
+    int offset_in_h;
+    int offset_in_w;
+    int offset_out_h;
+    int offset_out_w;
 };
 
 
