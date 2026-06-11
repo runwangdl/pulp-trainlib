@@ -91,7 +91,7 @@ void pulp_conv2d_fp32_fw_cl(void *Conv2D_args) {
             matMul_args.N = C_out;
             matMul_args.K = pW * pH * C_in;
             matMul_args.M =
-                    (W_in - pW + stride_w + Lpad + Rpad) / stride_w * (H_in - pH + stride_h + Upad + Dpad) / stride_h;
+                    ((W_in - pW + stride_w + Lpad + Rpad) / stride_w) * ((H_in - pH + stride_h + Upad + Dpad) / stride_h);
             matMul_args.trans_B = 1;
             matMul_args.HWC = HWC_layout;
             matMul_args.bias = biasData;
@@ -138,7 +138,7 @@ void pulp_conv2d_fp32_fw_cl(void *Conv2D_args) {
             matMul_args.B = coeffData;
             matMul_args.C = outData;
             matMul_args.N =
-                    (W_in - pW + stride_w + Lpad + Rpad) / stride_w * (H_in - pH + stride_h + Upad + Dpad) / stride_h;
+                    ((W_in - pW + stride_w + Lpad + Rpad) / stride_w) * ((H_in - pH + stride_h + Upad + Dpad) / stride_h);
             matMul_args.K = pW * pH * C_in;
             matMul_args.M = C_out;
             matMul_args.trans_B = 1;
